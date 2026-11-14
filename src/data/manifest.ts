@@ -47,11 +47,12 @@ export type EagerDataFile = (typeof EAGER_DATA_FILES)[number]
 /**
  * Subdirectories holding the per-version-group partitions (14 files each for
  * learnsets and encounters, 10 each for trainers and battle -- the matchup
- * engine's per-game move tables and AI, scripts/build-battle-data.mjs). Fetched
+ * engine's per-game move tables and AI, scripts/build-battle-data.mjs; 1 for
+ * frontier, Emerald's Battle Frontier rules, scripts/frontier/build.mjs). Fetched
  * on demand and populated into the runtime cache on first request, never
  * precached at install time.
  */
-export const PARTITION_DIRS = ['learnsets', 'encounters', 'trainers', 'battle'] as const
+export const PARTITION_DIRS = ['learnsets', 'encounters', 'trainers', 'battle', 'frontier'] as const
 
 /**
  * OFFLINE BEFORE FIRST VIEW (2026-11-07). The partitions of the mechanics scope,
