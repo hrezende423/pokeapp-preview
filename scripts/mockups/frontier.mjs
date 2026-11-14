@@ -86,10 +86,15 @@ const link = (id) =>
   id == null
     ? '<span class="unknown">Unknown</span>'
     : `<a class="link" href="#species-${id}" title="Opens ${esc(spName(id))} in the Pokédex">${esc(spName(id))}</a>`
-const evText = (evs) =>
+/** EVs in game order: mono digits, muted stat labels. */
+const evHtml = (evs) =>
   STATS.filter(([k]) => evs?.[k])
-    .map(([k, l]) => `${evs[k]} ${l}`)
+    .map(([k, l]) => `<span class="nw">${num(evs[k])} <span class="muted">${l}</span></span>`)
     .join(' / ') || '—'
+const range = (a, b, hash = '') => `<span class="nw">${hash}${num(a)}–${hash}${num(b)}</span>`
+/** More than two stacked children: position them by named area (root rule). */
+const areas = (layout, pairs) =>
+  `<div class="stack" data-layout="${layout}" style="grid-template-areas:${pairs.map(([a]) => `'${a}'`).join(' ')}">${pairs.map(([a, html]) => `<div style="grid-area:${a}">${html}</div>`).join('')}</div>`
 const ICON = {
   back: '<path d="M5 12l14 0"/><path d="M5 12l6 6"/><path d="M5 12l6 -6"/>',
   plus: '<path d="M12 5l0 14"/><path d="M5 12l14 0"/>',
@@ -104,17 +109,17 @@ const icon = (name) =>
 const symbolToggle = (label, on) =>
   `<button class="sym" type="button" aria-pressed="${on}">${icon(on ? 'check' : 'square')}<span>${esc(label)}</span></button>`
 
-/** The streak-table value as the facility counts it, for prose. */
-function appearanceText(a) {
-  if (a.unit === 'tournament') return `tournament ${a.unitNumber} final (battle ${a.battle})`
-  if (a.unit === 'room') return `room ${a.battle}`
-  if (a.unit === 'floor') return `the top, after floor ${a.battle}`
-  return `battle ${a.battle}`
+/** The streak-table value as the facility counts it (HTML: mono numbers). */
+function appearanceHtml(a) {
+  if (a.unit === 'tournament') return `tournament ${num(a.unitNumber)} final (battle ${num(a.battle)})`
+  if (a.unit === 'room') return `room ${num(a.battle)}`
+  if (a.unit === 'floor') return `the top, after floor ${num(a.battle)}`
+  return `battle ${num(a.battle)}`
 }
-const repeatText = (b) =>
+const repeatHtml = (b) =>
   b.silver.unit === 'tournament'
-    ? `every ${b.streak.repeat} tournaments after`
-    : `every ${b.streak.repeat} ${b.silver.unit}s after`
+    ? `every ${num(b.streak.repeat)} tournaments after`
+    : `every ${num(b.streak.repeat)} ${b.silver.unit}s after`
 
 /** The label a logged battle number gets (the tracker stores the number as logged). */
 function battleLabel(facility, n) {
@@ -286,7 +291,7 @@ h1,h2,h3,h4,p{margin:0;font-weight:var(--font-weight-regular)}
 .notice{padding:var(--space-8) 0;color:var(--color-text-muted)}
 
 /* links: a clickable label with a hairline, never a button shape */
-.link{color:inherit;text-decoration:none;border-bottom:var(--border-width-thin) solid var(--color-border-hairline)}
+.link{color:inherit;text-decoration:none;border-bottom:var(--border-width-thin) solid transparent}
 .link:hover{border-bottom-color:var(--color-border-strong)}
 .unknown{color:var(--color-text-muted)}
 .sat-out{color:var(--color-text-muted)}
@@ -303,9 +308,8 @@ h1,h2,h3,h4,p{margin:0;font-weight:var(--font-weight-regular)}
 .t th{font-size:var(--font-style-label-caps-size);line-height:var(--font-style-label-caps-line-height);letter-spacing:var(--font-tracking-caps);text-transform:uppercase;font-weight:var(--font-weight-regular);color:var(--color-text-muted);text-align:left;white-space:nowrap;padding:var(--space-2) var(--space-4) var(--space-2) 0;border-bottom:var(--border-width-thin) solid var(--color-border-hairline)}
 .t td{padding:var(--space-2) var(--space-4) var(--space-2) 0;border-bottom:var(--border-width-thin) solid var(--color-border-hairline);vertical-align:top}
 .t .r{text-align:right}
-.t .nw{white-space:nowrap}
+.nw{white-space:nowrap}
 .t tr.group td{padding-top:var(--space-6);border-bottom-color:var(--color-border-strong)}
-.strong{font-weight:var(--font-weight-semibold)}
 
 /* actions and fields */
 button{font:inherit;letter-spacing:inherit;color:var(--color-text-default);background:none;border:0;padding:0;cursor:pointer}
@@ -336,14 +340,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 .fac-grid{display:grid;grid-template-areas:"tower dome" "factory palace" "arena pike" "pyramid ." "shared shared";grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-12) var(--space-8)}
 .fac{display:grid;grid-template-areas:"name" "rule" "facts";row-gap:var(--space-3);min-width:0;align-content:start}
 .fac .name{grid-area:name}.fac .rule{grid-area:rule}.fac .kv{grid-area:facts}
-.bpruns{font-family:var(--font-family-mono);font-variant-numeric:tabular-nums;font-size:var(--font-style-data-size);line-height:var(--font-style-data-line-height);letter-spacing:var(--font-tracking-data)}
+.menu-room{height:calc(var(--space-16) * 2)}
 .shared{grid-area:shared;display:grid;grid-template-areas:"title title" "symbols levels" "banned bprules" "shop shop";grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-8);padding-top:var(--space-8);border-top:var(--border-width-thin) solid var(--color-border-strong)}
 .shop{grid-area:shop;display:grid;grid-template-areas:"d1 d2 vit hold";grid-template-columns:repeat(4,minmax(0,1fr));column-gap:var(--space-6)}
 .banned{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4)}
 
 /* brains */
-.brain{display:grid;grid-template-areas:"head" "when" "silver" "gold";row-gap:var(--space-4);padding-bottom:var(--space-8);border-bottom:var(--border-width-thin) solid var(--color-border-strong);min-width:0}
+.brain{display:grid;grid-template-areas:"head" "when" "silver" "gold";row-gap:var(--space-4);padding-block:var(--space-8);border-bottom:var(--border-width-thin) solid var(--color-border-strong);min-width:0}
+.brain:first-child{padding-top:0}
 .brain:last-child{border-bottom:0}
+.brain-list{display:grid;min-width:0}
+.brain-head .name{grid-area:name}
 .brain-head{grid-area:head;display:grid;grid-template-areas:"name meta";grid-template-columns:auto minmax(0,1fr);column-gap:var(--space-3);align-items:baseline}
 .brain-head .meta{grid-area:meta}
 
@@ -356,12 +363,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 .run-head .backlink{grid-area:back;justify-self:start}
 .run-head h1{grid-area:title;font-size:var(--font-style-h4-size);line-height:var(--font-style-h4-line-height)}
 .run-head .facts{grid-area:facts;color:var(--color-text-muted)}
-.addrow{display:grid;grid-template-areas:"n label s1 s2 s3 result";grid-template-columns:auto auto repeat(3,minmax(0,1fr)) auto;column-gap:var(--space-4);align-items:end;padding-block:var(--space-3);border-bottom:var(--border-width-thin) solid var(--color-border-hairline)}
+.addrow{display:grid;grid-template-areas:"n label s1 s2 s3 result" ". . note note note .";row-gap:var(--space-3);grid-template-columns:auto auto repeat(3,minmax(0,1fr)) auto;column-gap:var(--space-4);align-items:end;padding-block:var(--space-3);border-bottom:var(--border-width-thin) solid var(--color-border-hairline)}
 .stack{display:grid;row-gap:var(--space-3);min-width:0}
 .three{display:grid;grid-template-areas:"a b c";grid-template-columns:repeat(3,minmax(0,1fr));column-gap:var(--space-8)}
 .four{display:grid;grid-template-areas:"a b c d";grid-template-columns:repeat(4,minmax(0,1fr));column-gap:var(--space-8)}
 .fac>*,.shared>*,.three>*,.four>*,.main>*,.side>*,.page>*,.stack>*,.tracker>*{min-width:0}
 .team{table-layout:fixed}
+.cases-head{padding-top:var(--space-8)}
 .picker-room{padding-bottom:calc(var(--space-16) * 5)}
 @container frontier (max-width:900px){
   .fac-grid{grid-template-areas:"tower" "dome" "factory" "palace" "arena" "pike" "pyramid" "shared";grid-template-columns:minmax(0,1fr)}
@@ -371,7 +379,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
   .shop{grid-template-areas:"d1" "d2" "vit" "hold";grid-template-columns:minmax(0,1fr)}
   .tracker{grid-template-areas:"head" "main" "side";grid-template-columns:minmax(0,1fr)}
   .three{grid-template-areas:"a" "b" "c";grid-template-columns:minmax(0,1fr);row-gap:var(--space-6)}
-  .addrow{grid-template-areas:"n label" "s1 s1" "s2 s2" "s3 s3" "result result";grid-template-columns:auto minmax(0,1fr)}
+  .run-head{grid-template-areas:"back" "title" "facts";grid-template-columns:minmax(0,1fr)}
+  .addrow{grid-template-areas:"n label" "s1 s1" "s2 s2" "s3 s3" "note note" "result result";grid-template-columns:auto minmax(0,1fr)}
 }
 `
 
@@ -392,8 +401,8 @@ const frame = (current, body, { menu = false, narrow = false, page = 'frontier' 
   `<div class="frame${narrow ? ' narrow' : ''}">${appBar(current, menu)}<div class="scroll" data-layout="frontier-scroll"><div class="page" data-layout="${page}">${body}</div></div></div>`
 const state = (n, title, note, html) =>
   `<section class="state" data-layout="state"><h2>${n}. ${esc(title)}</h2>${note ? `<p class="note">${note}</p>` : ''}${html}</section>`
-const pageHead = (title, actions = '') =>
-  `<header class="page-head" data-layout="page-head"><h1>${esc(title)}</h1><span class="scope">Emerald · Gen 3</span>${actions ? `<div class="actions">${actions}</div>` : ''}</header>`
+const pageHead = (title, actions = '', scope = 'Emerald · Gen 3') =>
+  `<header class="page-head" data-layout="page-head"><h1>${esc(title)}</h1>${scope ? `<span class="scope">${scope}</span>` : ''}${actions ? `<div class="actions">${actions}</div>` : ''}</header>`
 const NOTICE = '<p class="notice" data-layout="frontier-notice">Battle Frontier data covers Emerald (Gen 3).</p>'
 
 function page(file, title, intro, states) {
@@ -406,13 +415,15 @@ function page(file, title, intro, states) {
 
 /**
  * BP per completed set (Dome: tournament), from bpAward for sets 1-30, as runs of
- * equal awards: "1–2: 1 · 3–4: 2 · … · 29 on: 15". Exact, and one line per format.
+ * equal awards: "1–2 → 1 · 3–4 → 2 · … · 29 on → 15". Exact, and one line per format.
  */
 function bpRuns(facility, format) {
   const v = Array.from({ length: 30 }, (_, k) => fd.bpAward({ facility, format, completedSets: k + 1 }).base)
   const runs = []
   v.forEach((x, k) => (runs.at(-1)?.v === x ? (runs.at(-1).to = k + 1) : runs.push({ from: k + 1, to: k + 1, v: x })))
-  return runs.map((r, i) => `${i === runs.length - 1 ? `${r.from} on` : r.from === r.to ? r.from : `${r.from}–${r.to}`}: ${r.v}`).join(' · ')
+  return runs
+    .map((r, i) => `<span class="nw">${i === runs.length - 1 ? `${num(r.from)} <span class="muted">on</span>` : r.from === r.to ? num(r.from) : range(r.from, r.to)} <span class="muted">→</span> ${num(r.v)}</span>`)
+    .join('<span class="muted"> · </span>')
 }
 
 function partyText(f) {
@@ -436,19 +447,19 @@ function facilitySection(id) {
     ['Party', partyText(f)],
     ['Challenge', SET_TEXT[f.unit](f)],
     ['Brain', `${esc(b.title)} ${esc(b.name)} · ${esc(b.symbolName)}`],
-    ['Silver', `${esc(appearanceText(b.silver))}`],
-    ['Gold', `${esc(appearanceText(b.gold))}, then ${esc(repeatText(b))}`],
+    ['Silver', `${appearanceHtml(b.silver)}`],
+    ['Gold', `${appearanceHtml(b.gold)}, then ${repeatHtml(b)}`],
     ['Brain team', b.teamKind === 'generated' ? 'Generated from the rental sets each time' : 'Fixed (see Brains)'],
-    ...f.formats.map((x) => [`BP · ${FORMAT[x.id]}`, `<span class="bpruns">${esc(bpRuns(id, x.id))}</span>`]),
+    ...f.formats.map((x) => [`BP · ${FORMAT[x.id]}`, bpRuns(id, x.id)]),
   ]
   const unit = id === 'dome' ? 'tournament' : 'set'
-  return `<section class="fac" data-layout="facility" style="grid-area:${id}" aria-label="${esc(f.name)}"><h2 class="name">${esc(f.name)}</h2><p class="rule">${esc(f.rules)} <span class="cap">BP rows: completed ${unit}s in the streak, then the award.</span></p><dl class="kv" data-layout="facility-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></section>`
+  return `<section class="fac" data-layout="facility" style="grid-area:${id}" aria-label="${esc(f.name)}"><h2 class="name">${esc(f.name)}</h2><p class="rule">${esc(f.rules)} <span class="cap">BP rows: completed ${unit}s in the streak → BP for that ${unit}.</span></p><dl class="kv" data-layout="facility-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></section>`
 }
 
 function sharedSection() {
   const symbols = `<div style="grid-area:symbols" data-layout="frontier-symbols"><p class="sec">Symbols</p><div class="tw"><table class="t"><thead><tr><th>Facility</th><th>Symbol</th><th>Silver</th><th>Gold</th></tr></thead><tbody>${ORDER.map((id) => {
     const b = BRAIN[id]
-    return `<tr><td>${esc(FAC[id].name)}</td><td>${esc(b.symbolName)}</td><td>${esc(appearanceText(b.silver))}</td><td>${esc(appearanceText(b.gold))}</td></tr>`
+    return `<tr><td>${esc(FAC[id].name)}</td><td>${esc(b.symbolName)}</td><td>${appearanceHtml(b.silver)}</td><td>${appearanceHtml(b.gold)}</td></tr>`
   }).join('')}</tbody></table></div></div>`
   const open = fd.trainerPoolForStreak({ facility: 'tower', levelMode: 'open', streak: 0 }).level
   const factoryOpen = fd.trainerPoolForStreak({ facility: 'factory', levelMode: 'open', streak: 0 }).level
@@ -465,7 +476,7 @@ function sharedSection() {
   const shop = `<div class="shop" data-layout="frontier-bp-shop">${clerks
     .map(([clerk, area, label]) => {
       const entries = fd.bpShop().filter((e) => e.clerk === clerk)
-      return `<div style="grid-area:${area}" data-layout="bp-shop-clerk"><p class="sec">${label} (${entries.length})</p><table class="t"><tbody>${entries.map((e) => `<tr><td>${esc(e.name)}</td><td class="r mono nw">${e.price} BP</td></tr>`).join('')}</tbody></table></div>`
+      return `<div style="grid-area:${area}" data-layout="bp-shop-clerk"><p class="sec">${label} (${entries.length})</p><table class="t"><tbody>${entries.map((e) => `<tr><td>${esc(e.name)}</td><td class="r nw">${num(e.price)} <span class="muted">BP</span></td></tr>`).join('')}</tbody></table></div>`
     })
     .join('')}</div>`
   return `<section class="shared" data-layout="frontier-shared" aria-label="Across the Frontier"><h2 class="name" style="grid-area:title">Across the Frontier</h2>${symbols}${levels}${banned}${bprules}${shop}</section>`
@@ -480,7 +491,7 @@ page(
       1,
       'The Battle Frontier tab, open',
       'New tab between Team Building and Tools; the word opens Facilities. Accent: the active tab only (the open dropdown marks the current entry by weight, not colour).',
-      frame('Facilities', `${pageHead('Facilities')}<p class="muted">…</p>`, { menu: true }),
+      frame('Facilities', `${pageHead('Facilities')}<div class="menu-room" aria-hidden="true"></div>`, { menu: true, page: 'frontier-facilities' }),
     ),
     state(
       2,
@@ -488,7 +499,7 @@ page(
       'All values from the loader: formats, party sizes, set length and unit, the rule, the Brain and when they appear, BP per format per completed set.',
       frame('Facilities', `${pageHead('Facilities')}<div class="fac-grid" data-layout="facility-grid">${ORDER.map(facilitySection).join('')}${sharedSection()}</div>`, { page: 'frontier-facilities' }),
     ),
-    state(3, 'Any other generation selected', 'One text notice; no selector of its own (no fifth exception).', frame('Facilities', `${pageHead('Facilities')}${NOTICE}`, { page: 'frontier-facilities' })),
+    state(3, 'Any other generation selected', 'One text notice; no selector of its own (no fifth exception).', frame('Facilities', `${pageHead('Facilities', '', '')}${NOTICE}`, { page: 'frontier-facilities' })),
     state(4, 'Narrow viewport (390px): nothing clips', 'Phone layout stays parked; this only checks that every region stacks and wide tables scroll inside the scroll area.', frame('Facilities', `${pageHead('Facilities')}<div class="fac-grid" data-layout="facility-grid">${['tower', 'dome'].map(facilitySection).join('')}</div>`, { narrow: true, page: 'frontier-facilities' })),
   ],
 )
@@ -499,15 +510,15 @@ function teamTable(label, team, iv) {
   return `<div data-layout="brain-team" style="grid-area:${label.toLowerCase()}"><p class="sec">${label} Symbol team · IVs ${iv} in every stat</p><div class="tw"><table class="t team"><colgroup><col style="width:14%"><col style="width:14%"><col style="width:10%"><col style="width:28%"><col style="width:34%"></colgroup><thead><tr><th>Pokémon</th><th>Item</th><th>Nature</th><th>EVs</th><th>Moves</th></tr></thead><tbody>${team
     .map(
       (m) =>
-        `<tr><td class="nw">${link(m.species_id)}</td><td class="nw">${esc(itemName(m.item_id))}</td><td>${esc(natureName(m.nature_id))}</td><td class="mono nw">${esc(evText(m.evs))}</td><td>${m.moves.map((id) => esc(moveName(id))).join(' · ')}</td></tr>`,
+        `<tr><td class="nw">${link(m.species_id)}</td><td class="nw">${esc(itemName(m.item_id))}</td><td>${esc(natureName(m.nature_id))}</td><td>${evHtml(m.evs)}</td><td>${m.moves.map((id) => esc(moveName(id))).join(' · ')}</td></tr>`,
     )
     .join('')}</tbody></table></div></div>`
 }
 
 function brainSection(id) {
   const b = BRAIN[id]
-  const head = `<header class="brain-head"><h2 class="name">${esc(b.title)} ${esc(b.name)}</h2><span class="meta muted">${esc(FAC[id].name)} · ${esc(b.symbolName)}</span></header>`
-  const when = `<p style="grid-area:when" data-layout="brain-appearances">Silver at ${esc(appearanceText(b.silver))}. Gold at ${esc(appearanceText(b.gold))}, then ${esc(repeatText(b))}. Singles only.</p>`
+  const head = `<header class="brain-head" data-layout="brain-head"><h2 class="name">${esc(b.title)} ${esc(b.name)}</h2><span class="meta muted">${esc(FAC[id].name)} · ${esc(b.symbolName)}</span></header>`
+  const when = `<p style="grid-area:when" data-layout="brain-appearances">Silver at ${appearanceHtml(b.silver)}. Gold at ${appearanceHtml(b.gold)}, then ${repeatHtml(b)}. Singles only.</p>`
   if (b.teamKind === 'fixed') {
     return `<section class="brain" data-layout="brain" aria-label="${esc(b.name)}">${head}${when}${teamTable('Silver', b.teams.silver, b.ivs.silver)}${teamTable('Gold', b.teams.gold, b.ivs.gold)}</section>`
   }
@@ -517,12 +528,12 @@ function brainSection(id) {
     const span = c < 7 ? `${c * 7 + 1}–${c * 7 + 7}` : `${c * 7 + 1} on`
     return `<tr><td class="mono">${span}</td><td class="r mono">#${lv.from}–#${lv.to}</td><td class="r mono">${lv.to - lv.from + 1}</td><td class="r mono">#${op.from}–#${op.to}</td><td class="r mono">${op.to - op.from + 1}</td></tr>`
   }).join('')
-  return `<section class="brain" data-layout="brain" aria-label="${esc(b.name)}">${head}${when}<div style="grid-area:silver" class="stack" data-layout="brain-generated"><p>No fixed team. Each time, Noland draws three sets from the rental range of your current set, exactly as a regular Factory opponent does (no Unown, no repeated species or held item). IVs: ${b.ivs.silver} in every stat at battle ${b.silver.battle}, ${b.ivs.gold} at battle ${b.gold.battle} and after.</p><p class="cap">The table team listed for him in the game data (Metang, Skarmory, Aggron) is Steven’s multi-battle team and is never used here.</p><div class="tw"><table class="t"><thead><tr><th>Battles</th><th class="r">Lv50 sets</th><th class="r">Count</th><th class="r">Open Level sets</th><th class="r">Count</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`
+  return `<section class="brain" data-layout="brain" aria-label="${esc(b.name)}">${head}${when}<div style="grid-area:silver;grid-template-areas:'rule' 'note' 'ranges'" class="stack" data-layout="brain-generated"><p style="grid-area:rule">No fixed team. Each time, Noland draws three sets from the rental range of your current set, exactly as a regular Factory opponent does (no Unown, no repeated species or held item). IVs: ${num(b.ivs.silver)} in every stat at battle ${num(b.silver.battle)}, ${num(b.ivs.gold)} at battle ${num(b.gold.battle)} and after.</p><p class="cap" style="grid-area:note">The table team listed for him in the game data (Metang, Skarmory, Aggron) is Steven’s multi-battle team and is never used here.</p><div class="tw" style="grid-area:ranges"><table class="t"><thead><tr><th>Battles</th><th class="r">Lv50 sets</th><th class="r">Count</th><th class="r">Open Level sets</th><th class="r">Count</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`
 }
 
 page('frontier-brains.html', 'Brains', 'Seven Brains: their Silver and Gold teams, or the rule that generates one.', [
-  state(1, 'Brains (Gen 3 selected)', 'Species names link to the species page. EVs in game order; IVs are one value for all six stats.', frame('Brains', `${pageHead('Brains')}<div class="stack" data-layout="brain-list">${ORDER.map(brainSection).join('')}</div>`, { page: 'frontier-brains' })),
-  state(2, 'Any other generation selected', null, frame('Brains', `${pageHead('Brains')}${NOTICE}`, { page: 'frontier-brains' })),
+  state(1, 'Brains (Gen 3 selected)', 'Species names link to the species page. EVs in game order; IVs are one value for all six stats.', frame('Brains', `${pageHead('Brains')}<div class="brain-list" data-layout="brain-list">${ORDER.map(brainSection).join('')}</div>`, { page: 'frontier-brains' })),
+  state(2, 'Any other generation selected', null, frame('Brains', `${pageHead('Brains', '', '')}${NOTICE}`, { page: 'frontier-brains' })),
 ])
 
 // ================================================================== 3. CHALLENGE TRACKER
@@ -551,12 +562,12 @@ function statsPanel(facility, format, levelMode) {
   const next = fd.nextBrainAt({ facility, format, levelMode, streak: current ? loaderStreak(facility, wins(current) + 1) : 0, symbols })
   const b = BRAIN[facility]
   const curText = current
-    ? `${wins(current)} battles${facility === 'dome' ? ` · ${setsCompleted(current)} tournaments` : ''} <span class="muted">(run ${current.attempt})</span>`
+    ? `${num(wins(current))} battles${facility === 'dome' ? ` · ${num(setsCompleted(current))} tournaments` : ''} <span class="muted">(run ${current.attempt})</span>`
     : '—'
   const nextText = next
-    ? `${next.symbol === 'silver' ? 'Silver' : 'Gold'} at ${appearanceText(next)}${current ? `, ${next.battle - wins(current)} to go` : ''}`
+    ? `${next.symbol === 'silver' ? 'Silver' : 'Gold'} at ${appearanceHtml(next)}${current ? `, ${num(next.battle - wins(current))} to go` : ''}`
     : 'None in this streak'
-  return `<section data-layout="tracker-stats"><p class="sec">${esc(FAC[facility].name)} · ${FORMAT[format]} · ${LEVEL[levelMode]}</p><dl class="kv"><div><dt>Current streak</dt><dd>${curText}</dd></div><div><dt>Best streak</dt><dd>${best} battles</dd></div><div><dt>${esc(b.symbolName)}</dt><dd>${symbolToggle('Silver', symbols >= 1)} ${symbolToggle('Gold', symbols >= 2)}</dd></div><div><dt>Next Brain</dt><dd>${esc(b.name)}: ${esc(nextText)}</dd></div></dl><p class="cap">The symbols are set from the log; toggle one you won before using the app.</p></section>`
+  return `<section data-layout="tracker-stats"><p class="sec">${esc(FAC[facility].name)} · ${FORMAT[format]} · ${LEVEL[levelMode]}</p><dl class="kv"><div><dt>Current streak</dt><dd>${curText}</dd></div><div><dt>Best streak</dt><dd>${num(best)} battles</dd></div><div><dt>${esc(b.symbolName)}</dt><dd>${symbolToggle('Silver', symbols >= 1)} ${symbolToggle('Gold', symbols >= 2)}</dd></div><div><dt>Next Brain</dt><dd>${esc(b.name)}: ${nextText}</dd></div></dl><p class="cap">The symbols are set from the log; toggle one you won before using the app.</p></section>`
 }
 
 function bpPanel(limit = 12) {
@@ -564,7 +575,7 @@ function bpPanel(limit = 12) {
   return `<section data-layout="tracker-bp"><p class="sec">Battle Points</p><p><span class="mono">${balance}</span> BP <span class="muted">of ${num(9999)} max</span></p><label class="field"><span class="cap">Opening balance (your in-game BP before the first logged set)</span><input class="uf num" value="0" aria-label="Opening balance"></label><div class="tw"><table class="t"><thead><tr><th>Earned</th><th class="r">BP</th><th class="r">Balance</th></tr></thead><tbody>${shown
     .map(
       (e) =>
-        `<tr><td>${esc(FAC[e.run.facility].name.replace('Battle ', ''))} run ${e.run.attempt}, ${e.run.facility === 'dome' ? 'tournament' : 'set'} ${e.set}${e.brain ? ` · ${esc(BRAIN[e.run.facility].name)} +${e.brainBonus}` : ''}</td><td class="r mono">+${e.points}</td><td class="r mono">${e.balance}</td></tr>`,
+        `<tr><td>${esc(FAC[e.run.facility].name.replace('Battle ', ''))} run ${e.run.attempt}, ${e.run.facility === 'dome' ? 'tournament' : 'set'} ${e.set}${e.brain ? ` <span class="nw">· ${esc(BRAIN[e.run.facility].name)} +${num(e.brainBonus)}</span>` : ''}</td><td class="r mono">+${e.points}</td><td class="r mono">${e.balance}</td></tr>`,
     )
     .join('')}</tbody></table></div><p class="cap">${ledger.length} entries; ${Math.max(0, ledger.length - limit)} older not shown. Spending at the Exchange Service Corner is a ledger line with a minus.</p></section>`
 }
@@ -581,7 +592,7 @@ function insights() {
     if (b.result === 'W') p.w += 1
     pairs.set(key, p)
   }
-  const history = ['dome', 'factory'].map((f) => `<tr><td>${esc(FAC[f].name)}</td><td class="mono">${allRuns.filter((r) => r.facility === f).map((r) => r.battles.length).join(' · ')}</td><td class="r mono">${Math.max(...allRuns.filter((r) => r.facility === f).map(wins))}</td></tr>`).join('')
+  const history = ['dome', 'factory'].map((f) => `<tr><td>${esc(FAC[f].name)}</td><td class="nw">${allRuns.filter((r) => r.facility === f).map((r) => num(r.battles.length)).join('<span class="muted"> · </span>')}</td><td class="r mono">${Math.max(...allRuns.filter((r) => r.facility === f).map(wins))}</td></tr>`).join('')
   return `<section class="three" data-layout="tracker-insights"><div style="grid-area:a" data-layout="insight-history"><p class="sec">Run history</p><table class="t"><thead><tr><th>Facility</th><th>Battles per run</th><th class="r">Best</th></tr></thead><tbody>${history}</tbody></table></div><div style="grid-area:b" data-layout="insight-species"><p class="sec">Most-seen opponents</p><table class="t"><tbody>${top.map(([id, n]) => `<tr><td>${link(id)}</td><td class="r mono">${n}</td></tr>`).join('')}</tbody></table></div><div style="grid-area:c" data-layout="insight-dome-pairs"><p class="sec">Dome: win rate per pair</p><table class="t"><thead><tr><th>Pair</th><th class="r">Won</th></tr></thead><tbody>${[...pairs.values()].map((p) => `<tr><td>${p.pair.map((s) => esc(spName(domeTeam[s]))).join(' + ')}</td><td class="r mono">${p.w} / ${p.n}</td></tr>`).join('')}</tbody></table></div></section>`
 }
 
@@ -590,18 +601,18 @@ function brainCell(run, b) {
   if (!b.brain) return ''
   const brain = BRAIN[run.facility]
   const label = `${esc(brain.name)} · ${b.brain.symbol === 'silver' ? 'Silver' : 'Gold'}`
-  if (brain.teamKind === 'generated') return `<span class="strong">${label}</span><br><span class="cap">Generated team: nothing to compare</span>`
+  if (brain.teamKind === 'generated') return `${label}<br><span class="cap">Generated team: nothing to compare</span>`
   const known = brain.teams[b.brain.symbol].map((m) => m.species_id)
   const match = known.join() === b.opponents.join()
-  return `<span class="strong">${label}</span><br><span class="cap">Known team: ${known.map((id) => esc(spName(id))).join(', ')} · ${match ? 'matches' : 'differs'}</span>`
+  return `${label}<br><span class="cap">Known team: ${known.map((id) => esc(spName(id))).join(', ')} · ${match ? 'matches' : 'differs'}</span>`
 }
 
 function domeLog(run, limit) {
   const battles = limit ? run.battles.slice(0, limit) : run.battles
-  return `<section data-layout="run-log"><p class="sec">Battle log</p><div class="tw"><table class="t"><thead><tr><th class="r">#</th><th>Battle</th><th>Opponent</th><th>Dropped</th><th>Your pair</th><th>Result</th><th>Brain</th><th>Note</th></tr></thead><tbody>${battles
+  return `<section data-layout="run-log"><p class="sec">Battle log</p><div class="tw"><table class="t"><thead><tr><th class="r">#</th><th>Battle</th><th>Opponent</th><th>Dropped</th><th>Your pair</th><th>Result</th><th>Brain</th></tr></thead><tbody>${battles
     .map(
       (b) =>
-        `<tr><td class="r mono">${b.n}</td><td class="nw">${esc(battleLabel('dome', b.n))}</td><td class="nw">${opponentCell(b)}</td><td class="nw">${b.dropped ? `<span class="mono">${b.dropped}</span> <span class="muted">${b.opponents[b.dropped - 1] == null ? 'Unknown' : esc(spName(b.opponents[b.dropped - 1]))}</span>` : '—'}</td><td class="nw">${b.pair.map((s) => esc(spName(domeTeam[s]))).join(' + ')}</td><td>${b.result === 'W' ? 'Won' : 'Lost'}</td><td>${brainCell(run, b)}</td><td class="muted">—</td></tr>`,
+        `<tr><td class="r mono">${b.n}</td><td class="nw">${esc(battleLabel('dome', b.n))}</td><td class="nw">${opponentCell(b)}</td><td class="nw">${b.dropped ? `<span class="mono">${b.dropped}</span> <span class="muted">${b.opponents[b.dropped - 1] == null ? 'Unknown' : esc(spName(b.opponents[b.dropped - 1]))}</span>` : '—'}</td><td class="nw">${b.pair.map((s) => esc(spName(domeTeam[s]))).join(' + ')}</td><td>${b.result === 'W' ? 'Won' : 'Lost'}</td><td>${brainCell(run, b)}</td></tr>`,
     )
     .join('')}</tbody></table></div></section>`
 }
@@ -615,12 +626,12 @@ function factoryLog(run) {
       const ev = !e
         ? ''
         : e.kind === 'draft'
-          ? `<tr class="group"><td colspan="6">${esc(battleLabel('factory', b.n).split(' · ')[0])} rentals: ${e.team.map(link).join(', ')}</td></tr>`
-          : `<tr><td></td><td colspan="5" class="cap">Swap before battle ${e.n}: ${e.out.map((id) => esc(spName(id))).join(', ')} out, ${e.in.map(link).join(', ')} in</td></tr>`
-      return `${ev}<tr><td class="r mono">${b.n}</td><td class="nw">${esc(battleLabel('factory', b.n))}</td><td class="nw">${opponentCell(b)}</td><td>${b.result === 'W' ? 'Won' : 'Lost'}</td><td>${brainCell(run, b)}</td><td class="muted">—</td></tr>`
+          ? `<tr class="group"><td colspan="5">${esc(battleLabel('factory', b.n).split(' · ')[0])} rentals: ${e.team.map(link).join(', ')}</td></tr>`
+          : `<tr><td></td><td colspan="4" class="cap">Swap before battle ${e.n}: ${e.out.map((id) => esc(spName(id))).join(', ')} out, ${e.in.map(link).join(', ')} in</td></tr>`
+      return `${ev}<tr><td class="r mono">${b.n}</td><td class="nw">${esc(battleLabel('factory', b.n))}</td><td class="nw">${opponentCell(b)}</td><td>${b.result === 'W' ? 'Won' : 'Lost'}</td><td>${brainCell(run, b)}</td></tr>`
     })
     .join('')
-  return `<section data-layout="run-log"><p class="sec">Battle log · your rentals appear when they change</p><div class="tw"><table class="t"><thead><tr><th class="r">#</th><th>Battle</th><th>Opponent</th><th>Result</th><th>Brain</th><th>Note</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></section>`
+  return `<section data-layout="run-log"><p class="sec">Battle log · your rentals appear when they change</p><div class="tw"><table class="t"><thead><tr><th class="r">#</th><th>Battle</th><th>Opponent</th><th>Result</th><th>Brain</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></section>`
 }
 
 function runHead(run) {
@@ -647,18 +658,18 @@ page('frontier-tracker.html', 'Challenge Tracker', 'The main screen. Every run b
     `Picker search is the Gen 3 Pokédex list (#1–386), in Pokédex order. “Unknown” is the first option, for a Pokémon you did not see; it shows as “Unknown” in the log, as the log’s “-” does at Factory run ${unknownBattle.r.attempt}, battle ${unknownBattle.b.n}.`,
     frame(
       'Challenge Tracker',
-      `${runHead(factoryRuns.at(-1))}<div class="tw" data-layout="run-log"><table class="t"><thead><tr><th class="r">#</th><th>Battle</th><th>Opponent</th><th>Result</th></tr></thead><tbody><tr><td class="r mono">${unknownBattle.b.n}</td><td>${esc(battleLabel("factory", unknownBattle.b.n))} <span class="muted">(run ${unknownBattle.r.attempt})</span></td><td class="nw">${opponentCell(unknownBattle.b)}</td><td>${unknownBattle.b.result === "W" ? "Won" : "Lost"}</td></tr></tbody></table></div><p class="cap">Factory run ${unknownBattle.r.attempt}, battle ${unknownBattle.b.n} as logged: ${unknownBattle.b.raw.map(esc).join(", ")}. Below: adding battle ${factoryRuns.at(-1).battles.length + 1} to run ${factoryRuns.at(-1).attempt}.</p><div class="picker-room"><div class="addrow" data-layout="log-add"><span class="mono" style="grid-area:n">${factoryRuns.at(-1).battles.length + 1}</span><span style="grid-area:label">${esc(battleLabel('factory', factoryRuns.at(-1).battles.length + 1))}</span><label class="field picker" style="grid-area:s1" data-layout="species-picker"><span class="cap">Opponent 1</span><input class="uf" value="ma" aria-label="Opponent 1"><ul role="listbox"><li aria-selected="true">Unknown (not seen)</li>${[...SPECIES.values()]
+      `${runHead(factoryRuns.at(-1))}${areas('log-add-state', [['add', `<div class="picker-room"><div class="addrow" data-layout="log-add"><span class="mono" style="grid-area:n">${factoryRuns.at(-1).battles.length + 1}</span><span style="grid-area:label">${esc(battleLabel('factory', factoryRuns.at(-1).battles.length + 1))}</span><label class="field picker" style="grid-area:s1" data-layout="species-picker"><span class="cap">Opponent 1</span><input class="uf" value="ma" aria-label="Opponent 1"><ul role="listbox"><li aria-selected="true">Unknown (not seen)</li>${[...SPECIES.values()]
         .filter((x) => x.id <= 386 && x.display_name.toLowerCase().startsWith('ma'))
         .map((x) => x.id)
         .slice(0, 6)
         .map((id) => `<li>${esc(spName(id))}</li>`)
-        .join('')}</ul></label><label class="field" style="grid-area:s2"><span class="cap">Opponent 2</span><input class="uf" placeholder="Search species" aria-label="Opponent 2"></label><label class="field" style="grid-area:s3"><span class="cap">Opponent 3</span><input class="uf" placeholder="Search species" aria-label="Opponent 3"></label><span style="grid-area:result" class="actions"><button class="ghost" type="button">Won</button><button class="ghost" type="button">Lost</button></span></div></div>`,
+        .join('')}</ul></label><label class="field" style="grid-area:s2"><span class="cap">Opponent 2</span><input class="uf" placeholder="Search species" aria-label="Opponent 2"></label><label class="field" style="grid-area:s3"><span class="cap">Opponent 3</span><input class="uf" placeholder="Search species" aria-label="Opponent 3"></label><label class="field" style="grid-area:note"><span class="cap">Note (optional)</span><input class="uf" placeholder="Anything worth remembering about this battle" aria-label="Note"></label><span style="grid-area:result" class="actions"><button class="ghost" type="button">Won</button><button class="ghost" type="button">Lost</button></span></div></div>`], ['example', `<p class="sec">Elsewhere in the log: an unknown Pokémon (Factory run ${unknownBattle.r.attempt})</p><div class="tw" data-layout="run-log"><table class="t"><thead><tr><th class="r">#</th><th>Battle</th><th>Opponent</th><th>Result</th></tr></thead><tbody><tr><td class="r mono">${unknownBattle.b.n}</td><td>${esc(battleLabel("factory", unknownBattle.b.n))} <span class="muted">(run ${unknownBattle.r.attempt})</span></td><td class="nw">${opponentCell(unknownBattle.b)}</td><td>${unknownBattle.b.result === "W" ? "Won" : "Lost"}</td></tr></tbody></table></div><p class="cap">As logged: ${unknownBattle.b.raw.map(esc).join(", ")}.</p>`]])}`,
       { page: 'frontier-run' },
     ),
   ),
-  state(5, 'New run', 'Facility, then only the formats it has; level mode; nothing else to start.', frame('Challenge Tracker', `${pageHead('Challenge Tracker')}<form class="three" data-layout="new-run" onsubmit="return false"><label class="field" style="grid-area:a"><span class="cap">Facility</span><select class="uf">${ORDER.map((id) => `<option${id === 'dome' ? ' selected' : ''}>${esc(FAC[id].name)}</option>`).join('')}</select></label><label class="field" style="grid-area:b"><span class="cap">Format</span><select class="uf">${FAC.dome.formats.map((x) => `<option>${FORMAT[x.id]}</option>`).join('')}</select></label><label class="field" style="grid-area:c"><span class="cap">Level</span><select class="uf"><option>Lv50</option><option>Open Level</option></select></label></form><p><button class="ghost" type="button">Start run</button></p>`, { page: 'frontier-tracker' })),
+  state(5, 'New run', 'Facility, then only the formats it has; level mode; nothing else to start.', frame('Challenge Tracker', `${pageHead('Challenge Tracker')}${areas('new-run', [['form', `<form class="three" data-layout="new-run-form" onsubmit="return false"><label class="field" style="grid-area:a"><span class="cap">Facility</span><select class="uf">${ORDER.map((id) => `<option${id === 'dome' ? ' selected' : ''}>${esc(FAC[id].name)}</option>`).join('')}</select></label><label class="field" style="grid-area:b"><span class="cap">Format</span><select class="uf">${FAC.dome.formats.map((x) => `<option>${FORMAT[x.id]}</option>`).join('')}</select></label><label class="field" style="grid-area:c"><span class="cap">Level</span><select class="uf"><option>Lv50</option><option>Open Level</option></select></label></form>`], ['start', '<button class="ghost" type="button">Start run</button>']])}`, { page: 'frontier-tracker' })),
   state(6, 'Empty: no runs yet', null, frame('Challenge Tracker', `${pageHead('Challenge Tracker', `<button class="ghost" type="button">${icon('plus')}New run</button>`)}<p class="notice" data-layout="tracker-empty">No runs yet. Start one, or import a tracker file from your saved documents.</p>`, { page: 'frontier-tracker' })),
-  state(7, 'Any other generation selected', null, frame('Challenge Tracker', `${pageHead('Challenge Tracker')}${NOTICE}`, { page: 'frontier-tracker' })),
+  state(7, 'Any other generation selected', null, frame('Challenge Tracker', `${pageHead('Challenge Tracker', '', '')}${NOTICE}`, { page: 'frontier-tracker' })),
   state(8, 'Narrow viewport (390px): nothing clips', 'The log scrolls inside the scroll area; the side panel stacks under it.', frame('Challenge Tracker', tracker(domeLog(domeRun, 4), statsPanel('dome', 'singles', 'lv50'), runHead(domeRun)), { narrow: true, page: 'frontier-run' })),
 ])
 
@@ -668,7 +679,7 @@ function setRows(list) {
   return list
     .map(
       (s) =>
-        `<tr><td class="r mono">${s.index}</td><td class="nw">${link(s.species_id)}</td><td class="nw">${esc(itemName(s.item_id))}</td><td>${esc(natureName(s.nature_id))}</td><td class="mono nw">${esc(evText(s.evs))}</td><td>${s.moves.map((id) => esc(moveName(id))).join(' · ')}</td><td class="muted nw">${s.openOnly ? 'Open Level only' : ''}</td></tr>`,
+        `<tr><td class="r mono">${s.index}</td><td class="nw">${link(s.species_id)}</td><td class="nw">${esc(itemName(s.item_id))}</td><td>${esc(natureName(s.nature_id))}</td><td class="nw">${evHtml(s.evs)}</td><td>${s.moves.map((id) => esc(moveName(id))).join(' · ')}</td><td class="muted nw">${s.openOnly ? 'Open Level only' : ''}</td></tr>`,
     )
     .join('')
 }
@@ -695,30 +706,39 @@ function lookup(label, input, facility, levelMode, battle, symbols, extra = {}) 
   const T = fd.trainers()
   const ivSplit =
     pool.ivBand.rule === 'trainer-id'
-      ? pool.ivBand.byTrainerId.map((b) => `${b.iv} for IDs ${b.from}–${b.to}`).join(', ')
-      : `${pool.ivBand.min === pool.ivBand.max ? pool.ivBand.min : `${pool.ivBand.min}–${pool.ivBand.max}`} (Factory table, read at your Battle Tower Lv50 streak: ${extra.towerLv50Streak ?? 'not given'})`
-  const draws = pool.draws.length > 1 ? pool.draws.map((d) => `${d.count ? `${d.count} from ` : ''}${d.idRange.from}–${d.idRange.to}${d.hard ? ' (Hard)' : ''}: ${d.when}`).join('; ') : ''
-  const level = pool.level.mode === 'lv50' ? `Level ${pool.level.level}` : `Your highest level, at least ${pool.level.min}`
+      ? pool.ivBand.byTrainerId.map((b) => `${num(b.iv)} for IDs ${range(b.from, b.to)}`).join(', ')
+      : `${pool.ivBand.min === pool.ivBand.max ? num(pool.ivBand.min) : range(pool.ivBand.min, pool.ivBand.max)} (Factory table, read at your Battle Tower Lv50 streak: ${extra.towerLv50Streak == null ? 'not given' : num(extra.towerLv50Streak)})`
+  const draws = pool.draws.length > 1 ? pool.draws.map((d) => `${d.count ? `${num(d.count)} from ` : ''}${range(d.idRange.from, d.idRange.to)}${d.hard ? ' (Hard)' : ''}: ${esc(d.when)}`).join('; ') : ''
+  const level = pool.level.mode === 'lv50' ? `Level ${num(pool.level.level)}` : `Your highest level, at least ${num(pool.level.min)}`
   const who = BRAIN[facility]
   const sym = pool.brain?.symbol === 'gold' ? 'Gold' : 'Silver'
-  const brain = pool.brain ? (facility === 'dome' ? `${who.name} (${sym}) takes one entrant’s place and waits in this tournament’s final.` : `${who.name} (${sym}) is this battle’s opponent${who.teamKind === 'generated' ? `, with a generated team at IVs ${who.ivs[pool.brain.symbol]}` : ''}; the trainer pool does not apply.`) : (() => {
+  const brain = pool.brain ? (facility === 'dome' ? `${who.name} (${sym}) takes one entrant’s place and waits in this tournament’s final.` : `${who.name} (${sym}) is this battle’s opponent${who.teamKind === 'generated' ? `, with a generated team at IVs ${num(who.ivs[pool.brain.symbol])}` : ''}; the trainer pool does not apply.`) : (() => {
     const n = fd.nextBrainAt({ facility, format: 'singles', levelMode, streak: loaderStreak(facility, battle), symbols })
-    return n ? `Not this battle. Next: ${n.symbol === 'silver' ? 'Silver' : 'Gold'} at ${appearanceText(n)}` : 'None in this streak'
+    return n ? `Not this battle. Next: ${n.symbol === 'silver' ? 'Silver' : 'Gold'} at ${appearanceHtml(n)}` : 'None in this streak'
   })()
   const facts = [
-    ['Battle', `${battle} · ${battleLabel(facility, battle)}`],
-    ['Trainer IDs', `${pool.idRange.from}–${pool.idRange.to} (${esc(T[pool.idRange.from].name)} … ${esc(T[pool.idRange.to].name)})`],
+    ['Battle', `${num(battle)} · ${esc(battleLabel(facility, battle))}`],
+    ['Trainer IDs', `${range(pool.idRange.from, pool.idRange.to)} (${esc(T[pool.idRange.from].name)} … ${esc(T[pool.idRange.to].name)})`],
     ...(draws ? [['Drawn as', draws]] : []),
     ['Hard 7th battle', pool.hard ? 'Yes' : 'No'],
     ['IVs', ivSplit],
     ['Level', level],
-    ...(pool.factorySetRange ? [['Opponent sets', `#${pool.factorySetRange.from}–#${pool.factorySetRange.to} (rental range, not the trainer’s list)`]] : []),
+    ...(pool.factorySetRange ? [['Opponent sets', `${range(pool.factorySetRange.from, pool.factorySetRange.to, '#')} (rental range, not the trainer’s list)`]] : []),
     ['Brain', brain],
   ]
-  return `<section class="stack" data-layout="streak-lookup-result"><p class="sec">${esc(label)}</p><p class="cap">${input}</p><dl class="kv">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section>`
+  return areas('streak-lookup-result', [
+    ['label', `<p class="sec">${esc(label)}</p>`],
+    ['input', `<p class="cap">${input}</p>`],
+    ['facts', `<dl class="kv">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`],
+  ])
 }
 const lookupForm = `<form class="four" data-layout="streak-lookup-form" onsubmit="return false"><label class="field" style="grid-area:a"><span class="cap">Facility</span><select class="uf"><option>Battle Dome</option></select></label><label class="field" style="grid-area:b"><span class="cap">Level</span><select class="uf"><option>Lv50</option></select></label><label class="field" style="grid-area:c"><span class="cap">Battle number (as you log it)</span><input class="uf num" value="20"></label><label class="field" style="grid-area:d"><span class="cap">Symbols held here</span><select class="uf"><option>None</option><option>Silver</option><option>Silver and Gold</option></select></label></form>`
-const lookupPanel = `<section class="stack" data-layout="streak-lookup"><h2 class="name">Streak lookup</h2><p class="cap">Facility, level mode and the battle you are about to fight; symbols held decide whether the Brain is due.</p>${lookupForm}<div class="three" data-layout="streak-lookup-cases"><div style="grid-area:a">${lookup('Dome battle 20', 'Battle Dome · Lv50 · battle 20 · no symbols', 'dome', 'lv50', 20, 0)}</div><div style="grid-area:b">${lookup('Factory battle 21', 'Battle Factory · Lv50 · battle 21 · no symbols · Tower Lv50 streak 0', 'factory', 'lv50', 21, 0, { towerLv50Streak: 0 })}</div><div style="grid-area:c">${lookup('Streak 49 (battle 50)', 'Battle Tower · Lv50 · 49 won, so battle 50 · Silver held', 'tower', 'lv50', 50, 1)}</div></div></section>`
+const lookupPanel = areas('streak-lookup', [
+  ['title', '<h2 class="name">Streak lookup</h2>'],
+  ['hint', '<p class="cap">Facility, level mode, the battle you are about to fight, and the symbols you hold here (they decide whether the Brain is due).</p>'],
+  ['form', lookupForm],
+  ['cases', `<p class="sec cases-head">The owner’s three cases, as the lookup answers them</p><div class="three" data-layout="streak-lookup-cases"><div style="grid-area:a">${lookup('Dome battle 20', 'Battle Dome · Lv50 · battle 20 · no symbols', 'dome', 'lv50', 20, 0)}</div><div style="grid-area:b">${lookup('Factory battle 21', 'Battle Factory · Lv50 · battle 21 · no symbols · Tower Lv50 streak 0', 'factory', 'lv50', 21, 0, { towerLv50Streak: 0 })}</div><div style="grid-area:c">${lookup('Streak 49 (battle 50)', 'Battle Tower · Lv50 · 49 won, so battle 50 · Silver held', 'tower', 'lv50', 50, 1)}</div></div>`],
+])
 
 const viewTabs = (sel) =>
   `<div class="vtabs" role="tablist" data-layout="sets-views"><button role="tab" aria-selected="${sel === 'sets'}">Sets <span class="mono muted">${fd.sets().length}</span></button><button role="tab" aria-selected="${sel === 'trainers'}">Trainers <span class="mono muted">${fd.trainers().length}</span></button></div>`
@@ -729,10 +749,10 @@ const salamence = fd.resolveSpecies('salamence')
 const sets = fd.sets()
 const vince = fd.trainers().find((t) => t.setIndices.some((i) => sets[i].openOnly))
 page('frontier-sets.html', 'Sets & Trainers', 'Two views of the 882 sets and 300 trainers, and the streak lookup.', [
-  state(1, 'Sets (first 30 of 882)', 'Search matches species, a trainer class that draws the set, or the held item. “Open Level only” is a text filter and a text column, never a badge. Selected view tab: the screen’s second accent.', frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${viewTabs('sets')}${setControls('', false)}<p class="cap" data-layout="sets-count">882 sets</p><div data-layout="sets-list">${setTable(sets.slice(0, 30))}</div>`, { page: 'frontier-sets' })),
-  state(2, 'Sets: search “salamence”', null, frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${viewTabs('sets')}${setControls('salamence', false)}<p class="cap" data-layout="sets-count">${sets.filter((s) => s.species_id === salamence).length} sets</p><div data-layout="sets-list">${setTable(sets.filter((s) => s.species_id === salamence))}</div>`, { page: 'frontier-sets' })),
-  state(3, 'Sets: Open Level only', null, frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${viewTabs('sets')}${setControls('', true)}<p class="cap" data-layout="sets-count">${sets.filter((s) => s.openOnly).length} sets</p><div data-layout="sets-list">${setTable(sets.filter((s) => s.openOnly))}</div>`, { page: 'frontier-sets' })),
-  state(4, `Trainers (first 25 of 300, and ${vince.name}, ${vince.id}, opened)`, 'IVs by trainer ID (3 up to ID 99 … 31 from ID 220). A row opens to its sets.', frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${viewTabs('trainers')}<label class="field" data-layout="trainers-search"><span class="cap">Search class or name</span><input class="uf" placeholder="Search"></label><div data-layout="trainers-list">${trainerTable([...fd.trainers().slice(0, 25), vince], vince.id)}</div>`, { page: 'frontier-sets' })),
+  state(1, 'Sets (first 30 of 882)', 'Search matches species, a trainer class that draws the set, or the held item. “Open Level only” is a text filter and a text column, never a badge. Selected view tab: the screen’s second accent.', frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${areas('sets-body', [['views', viewTabs('sets')], ['controls', setControls('', false)], ['count', `<p class="cap" data-layout="sets-count">882 sets</p>`], ['list', `<div data-layout="sets-list">${setTable(sets.slice(0, 30))}</div>`]])}`, { page: 'frontier-sets' })),
+  state(2, 'Sets: search “salamence”', null, frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${areas('sets-body', [['views', viewTabs('sets')], ['controls', setControls('salamence', false)], ['count', `<p class="cap" data-layout="sets-count">${sets.filter((s) => s.species_id === salamence).length} sets</p>`], ['list', `<div data-layout="sets-list">${setTable(sets.filter((s) => s.species_id === salamence))}</div>`]])}`, { page: 'frontier-sets' })),
+  state(3, 'Sets: Open Level only', null, frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${areas('sets-body', [['views', viewTabs('sets')], ['controls', setControls('', true)], ['count', `<p class="cap" data-layout="sets-count">${sets.filter((s) => s.openOnly).length} sets</p>`], ['list', `<div data-layout="sets-list">${setTable(sets.filter((s) => s.openOnly))}</div>`]])}`, { page: 'frontier-sets' })),
+  state(4, `Trainers (first 25 of 300, and ${vince.name}, ${vince.id}, opened)`, 'IVs by trainer ID (3 up to ID 99 … 31 from ID 220). A row opens to its sets.', frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${areas('trainers-body', [['views', viewTabs('trainers')], ['search', '<label class="field" data-layout="trainers-search"><span class="cap">Search class or name</span><input class="uf" placeholder="Search"></label>'], ['list', `<div data-layout="trainers-list">${trainerTable([...fd.trainers().slice(0, 25), vince], vince.id)}</div>`]])}`, { page: 'frontier-sets' })),
   state(5, 'Streak lookup: the owner’s three cases', 'Input is the battle number as logged; the derived label is shown, the loader’s streak is not.', frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${lookupPanel}`, { page: 'frontier-sets' })),
-  state(6, 'Any other generation selected', null, frame('Sets & Trainers', `${pageHead('Sets & Trainers')}${NOTICE}`, { page: 'frontier-sets' })),
+  state(6, 'Any other generation selected', null, frame('Sets & Trainers', `${pageHead('Sets & Trainers', '', '')}${NOTICE}`, { page: 'frontier-sets' })),
 ])
