@@ -47,6 +47,8 @@ export interface RawFacility {
   /** Streak units in one completed set (1 for the Dome: its streak counts tournaments). */
   streak_per_set: number
   rules: string
+  /** Factory: Open Level rentals are level 100, so its opponents always are too. */
+  open_level?: number
   brain: {
     name: string
     title: string
@@ -222,6 +224,8 @@ export interface TrainerPool {
   draws: PoolDraw[]
   /** Factory: the set indices opponents draw from (the trainer's own list is unused). */
   factorySetRange?: IdRange
+  /** Set when `symbols` was passed and the Frontier Brain is due instead (Dome: in this tournament). */
+  brain?: BrainAppearance
   note?: string
 }
 
@@ -230,7 +234,10 @@ export interface TrainerPoolArgs {
   levelMode: LevelMode
   /** Wins so far in the facility's own unit (see StreakUnit). */
   streak: number
+  /** Default singles. Brains appear in singles only. */
   format?: FrontierFormat
+  /** Symbols held at this facility: pass it to learn whether the Brain is due (`brain`). */
+  symbols?: 0 | 1 | 2
   /** Factory only: the Battle Tower Lv50 streak in the same format (see IvBand). */
   towerLv50Streak?: number
 }

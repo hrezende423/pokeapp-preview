@@ -237,6 +237,37 @@ const factoryBrainGenerated =
   /TRAINER_FRONTIER_BRAIN\)\s*\{\s*FillFactoryBrainParty\(\);/.test(functionBody(tower, 'FillFactoryFrontierTrainerParty'))
 expect(factoryBrainGenerated && brainIvOffset, 'FillFactoryBrainParty is no longer a GetFactoryMonId draw')
 
+// SetPlayerAndOpponentParties (battle_factory.c): Open Level rentals are created
+// at FRONTIER_MAX_LEVEL_OPEN, so GetFrontierEnemyMonLevel's "highest in party"
+// is always that level for Factory opponents and Noland.
+const factoryOpenLevel = /lvlMode != FRONTIER_LVL_50\)\s*monLevel = (FRONTIER_MAX_LEVEL_OPEN);/.exec(
+  functionBody(factory, 'SetPlayerAndOpponentParties'),
+)
+expect(factoryOpenLevel, 'SetPlayerAndOpponentParties no longer creates Open Level rentals at FRONTIER_MAX_LEVEL_OPEN')
+
+// The per-facility battleNum rules rules.ts hard-codes (trainerPoolForStreak):
+// Dome entrants 1-5 from streak + 1 and 6-15 from the streak (InitDomeTrainers);
+// Pike battleNum 1, or 6 for a Hard Battle room (PrepareOneTrainer); Pyramid
+// battleNum = floor index (GetUniqueTrainerId).
+expect(
+  /GetRandomScaledFrontierTrainerId\(GetCurrentFacilityWinStreak\(\), 0\)/.test(dome) &&
+    /GetRandomScaledFrontierTrainerId\(GetCurrentFacilityWinStreak\(\) \+ 1, 0\)/.test(dome) &&
+    /if \(i > 5\)/.test(dome),
+  'InitDomeTrainers: entrant ranges changed',
+)
+expect(
+  /if \(!difficult\)\s*battleNum = 1;\s*else\s*battleNum = FRONTIER_STAGES_PER_CHALLENGE - 1;/.test(
+    functionBody(src('src/battle_pike.c'), 'PrepareOneTrainer'),
+  ),
+  'PrepareOneTrainer: Pike battleNum rule changed',
+)
+expect(
+  /u32 floor = gSaveBlock2Ptr->frontier\.curChallengeBattleNum;[\s\S]*GetRandomScaledFrontierTrainerId\(challengeNum, floor\)/.test(
+    functionBody(src('src/battle_pyramid.c'), 'GetUniqueTrainerId'),
+  ),
+  'GetUniqueTrainerId: Pyramid battleNum rule changed',
+)
+
 // ------------------------------------------------------------- Frontier Brains
 
 // sFrontierBrainStreakAppearances (frontier_util.c): {silver, gold, repeat, offset}.
@@ -395,9 +426,13 @@ const facilities = FACILITIES.map((f) => {
   )
   const [silver, gold, repeat, offset] = brainStreaks.get(index)
   const generated = index === factoryIdx
-  // Factory: FillFactoryBrainParty's IV is sFixedIVTable[challenge + 2][0], where
-  // challenge = (wins before the Brain battle) / 7.
-  const factoryIv = (battle) => ivTable[Math.min(Math.floor((battle - 1) / 7) + Number(brainIvOffset[1]), ivTable.length - 1)][0]
+  // Factory: FillFactoryBrainParty's IV is GetFactoryMonFixedIV(challenge + 2, FALSE),
+  // challenge = (wins before the Brain battle) / 7; same row rule as rules.ts.
+  const factoryIv = (streakValue) => {
+    const row = Math.floor((streakValue - offset) / value('FRONTIER_STAGES_PER_CHALLENGE')) + Number(brainIvOffset[1])
+    const clamped = row > ivTable.length ? ivTable.length - 1 : row
+    return clamped === ivTable.length ? outOfBounds.normal : ivTable[clamped][0]
+  }
   return {
     id: f.id,
     index,
@@ -407,6 +442,7 @@ const facilities = FACILITIES.map((f) => {
     per_set: perSet,
     streak_per_set: streakPerSet,
     rules: f.rules,
+    ...(f.id === 'factory' ? { open_level: value(factoryOpenLevel[1]) } : {}),
     brain: {
       ...f.brain,
       team_kind: generated ? 'generated' : 'fixed',
@@ -530,15 +566,21 @@ function checkTrainer(key) {
   }
   const b = regular[t.id]
   const got = { class_id: b.class_id, name: b.name?.toUpperCase(), set_keys: b.set_keys }
+  // Decomp-side values, so verify:frontier-data can re-compare them with the bundle.
   return (
     expect(JSON.stringify(want) === JSON.stringify(got), `trainer ${key}: decomp ${JSON.stringify(want)} vs bundle ${JSON.stringify(got)}`) && {
       id: t.id,
       key,
-      class_id: want.class_id,
-      name: b.name,
-      sets: want.set_keys.length,
+      ...want,
     }
   )
+}
+
+/** Decomp keys and names at sample positions: the suite re-checks the bundle's order against them. */
+const keyAt = new Map([...C].filter(([k, v]) => k.startsWith('FRONTIER_MON_') && typeof v === 'number').map(([k, v]) => [v, k]))
+const orderSamples = {
+  sets: Object.fromEntries([0, 109, 110, 371, 372, 849, 850, 881].map((i) => [i, keyAt.get(i)])),
+  trainers: Object.fromEntries([0, 99, 100, 119, 200, 219, 220, 299].map((i) => [i, cString(decompTrainers[i].trainerName)])),
 }
 
 const namedSets = [checkSet('FRONTIER_MON_SUNKERN'), checkSet('FRONTIER_MON_SUICUNE_6')]
@@ -608,6 +650,7 @@ const out = {
   checks: {
     set_order_is_decomp_index: setOrder,
     trainer_order_is_decomp_id: trainerOrder,
+    order_samples: orderSamples,
     named_sets: namedSets,
     named_trainers: namedTrainers,
   },

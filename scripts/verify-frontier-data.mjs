@@ -68,18 +68,35 @@ check(
   '42 Brain Pokemon (7 facilities x 2 symbols x 3)',
   rules.counts.brain_pokemon === 42 && frontier.trainers.filter((t) => t.party).reduce((n, t) => n + t.party.length, 0) === 42,
 )
-check('set order = decomp set index; trainer order = decomp trainer id', rules.checks.set_order_is_decomp_index === true && rules.checks.trainer_order_is_decomp_id === true)
+// The build wrote these from the DECOMP side; here they meet the trainer bundle as it is now.
+const regular = frontier.trainers.filter((t) => !t.party)
+const samples = rules.checks.order_samples
+const setDrift = Object.entries(samples.sets).filter(([i, k]) => frontier.sets[i]?.key !== k)
+const trainerDrift = Object.entries(samples.trainers).filter(([i, n]) => regular[i]?.name?.toUpperCase() !== n)
 check(
-  'named sets match the decomp field by field (FRONTIER_MON_SUNKERN, FRONTIER_MON_SUICUNE_6)',
-  same(rules.checks.named_sets.map((s) => s.key), ['FRONTIER_MON_SUNKERN', 'FRONTIER_MON_SUICUNE_6']) &&
-    rules.checks.named_sets.every((s) => {
-      const b = frontier.sets[s.index]
-      return b.key === s.key && b.species_id === s.species_id && same(b.moves, s.moves) && b.item_id === s.item_id && b.nature_id === s.nature_id
-    }),
+  `set order = decomp set index at ${Object.keys(samples.sets).length} sample indices, around every range edge`,
+  Object.keys(samples.sets).length === 8 && setDrift.length === 0,
+  setDrift.map(([i]) => i).join(),
 )
 check(
-  'named trainers match the decomp field by field (BRADY id 0, GRETEL id 299)',
-  same(rules.checks.named_trainers.map((t) => [t.id, t.name]), [[0, 'Brady'], [299, 'Gretel']]),
+  `trainer order = decomp trainer id at ${Object.keys(samples.trainers).length} sample ids, around every ladder edge`,
+  Object.keys(samples.trainers).length === 8 && trainerDrift.length === 0,
+  trainerDrift.map(([i]) => i).join(),
+)
+const sortedJson = (o) => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v))
+const fieldsOf = (s) => sortedJson({ key: s.key, species_id: s.species_id, moves: s.moves, item_id: s.item_id, nature_id: s.nature_id, evs: s.evs })
+check(
+  'named sets match the decomp field by field, EVs included (FRONTIER_MON_SUNKERN, FRONTIER_MON_SUICUNE_6)',
+  same(rules.checks.named_sets.map((s) => s.key), ['FRONTIER_MON_SUNKERN', 'FRONTIER_MON_SUICUNE_6']) &&
+    rules.checks.named_sets.every((s) => fieldsOf(frontier.sets[s.index]) === fieldsOf(s)),
+)
+check(
+  'named trainers match the decomp field by field: class, name, set list (BRADY id 0, GRETEL id 299)',
+  same(rules.checks.named_trainers.map((t) => t.id), [0, 299]) &&
+    rules.checks.named_trainers.every((t) => {
+      const b = regular[t.id]
+      return b.class_id === t.class_id && b.name?.toUpperCase() === t.name && same(b.set_keys, t.set_keys)
+    }),
 )
 check('pinned to the trainer build’s disassembly', rules.source === trainerBundle.sources.disassembly, rules.source)
 
@@ -165,6 +182,19 @@ check(
   same(pool('tower', 0).level, { mode: 'lv50', level: 50 }) &&
     same(fd.trainerPoolForStreak({ facility: 'tower', levelMode: 'open', streak: 0 }).level, { mode: 'open', min: 60, max: 100, rule: 'highest-in-party' }),
 )
+check(
+  'Factory Open Level: rentals are level 100, so opponents are 100',
+  same(fd.trainerPoolForStreak({ facility: 'factory', levelMode: 'open', streak: 0 }).level, { mode: 'open', min: 100, max: 100, rule: 'highest-in-party' }),
+)
+p = pool('tower', 1792)
+check('the challenge is a u8: Tower streak 1792 reads as challenge 0 (0-99, IV 3)', p.challenge === 0 && r(p) === '0-99' && p.ivBand.max === 3)
+check('Factory rental row wraps too: streak 1806 (challenge 258) -> row 2', same(pool('factory', 1806).factorySetRange, { from: 267, to: 371 }))
+p = pool('tower', 34, { symbols: 0 })
+check('Tower streak 34, no symbol: Anabel is due, the pool does not apply', p.brain?.battle === 35 && p.brain.symbol === 'silver' && /Anabel/.test(p.note ?? ''))
+check('no `symbols`, or not due -> no brain flag', pool('tower', 34).brain === undefined && pool('tower', 33, { symbols: 0 }).brain === undefined)
+p = pool('dome', 4, { symbols: 0 })
+check('Dome, 4 tournaments won: Tucker is in this tournament', p.brain?.unitNumber === 5 && /Tucker/.test(p.note ?? ''))
+check('doubles: no Brain is ever due', pool('tower', 34, { symbols: 0, format: 'doubles' }).brain === undefined)
 
 hr('5. FRONTIER BRAINS (GetFrontierBrainStatus, sFrontierBrainStreakAppearances)')
 const brain = (facility, symbols, streak = 0, format = 'singles') => fd.nextBrainAt({ facility, format, levelMode: 'lv50', streak, symbols })
@@ -237,7 +267,8 @@ const speciesCells = [
   ...(/A ([^,]+), B ([^,]+), C (.+)$/.exec(rows.find((row) => /^## dome/.test(row.cells.B ?? ''))?.cells.H ?? '')?.slice(1) ?? []),
 ].filter((n) => n && n !== '-')
 const unresolved = [...new Set(speciesCells.filter((n) => fd.resolveSpecies(n) == null))]
-check(`every species in the log resolves (${speciesCells.length} cells, ${new Set(speciesCells).size} names)`, unresolved.length === 0, unresolved.join(', '))
+check('the log’s species cells were all read: 500 cells, 175 names', speciesCells.length === 500 && new Set(speciesCells).size === 175, `${speciesCells.length} / ${new Set(speciesCells).size}`)
+check('every species in the log resolves', unresolved.length === 0, unresolved.join(', '))
 const brainRows = (block) => block.filter((row) => Object.values(row.cells).some((v) => v === 'silver' || v === 'gold'))
 const domeBrains = brainRows(dome)
 const factoryBrains = brainRows(factory)
@@ -255,15 +286,14 @@ check('Factory: Noland at battle 21 (silver), as nextBrainAt says', same(factory
 const fielded = ids(factoryBrains[0], ['C', 'D', 'E'])
 const tableTeam = frontier.trainers.find((t) => t.key === 'brain-factory-silver').party.map((m) => m.species_id)
 check('Factory: Noland’s logged team is not the sFrontierBrainsMons team', fielded.every((id) => !tableTeam.includes(id)), `${fielded} vs ${tableTeam}`)
+// Evidence, not proof (the proof is FillFactoryBrainParty): the log does not say
+// the level mode; its Noland team fits the Lv50 draw for his 21st battle.
 const nolandPool = fd.trainerPoolForStreak({ facility: 'factory', levelMode: 'lv50', streak: 20 }).factorySetRange
-const inRange = (lv) => {
-  const range = fd.trainerPoolForStreak({ facility: 'factory', levelMode: lv, streak: 20 }).factorySetRange
-  return fielded.every((id) => sets.some((s) => s.species_id === id && s.index >= range.from && s.index <= range.to))
-}
+const inPool = fielded.map((id) => sets.some((s) => s.species_id === id && s.index >= nolandPool.from && s.index <= nolandPool.to))
 check(
-  'Factory: each of Noland’s logged Pokemon has a set in the challenge-3 rental range (generated)',
-  inRange('lv50') || inRange('open'),
-  `Lv50 ${nolandPool.from}-${nolandPool.to}: ${inRange('lv50')}, Open: ${inRange('open')}`,
+  'Factory: each of Noland’s logged Pokemon has a set in the Lv50 challenge-3 rental range 267-371',
+  same(nolandPool, { from: 267, to: 371 }) && inPool.every(Boolean),
+  `${fielded} -> ${inPool}`,
 )
 
 console.log(`\n${failures.length ? `FAILED (${failures.length}):\n  - ${failures.join('\n  - ')}` : 'all passed'}`)

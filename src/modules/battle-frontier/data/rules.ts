@@ -57,6 +57,13 @@ export function speciesKey(name: string): string {
 
 const toRange = ([from, to]: [number, number]): IdRange => ({ from, to })
 
+/**
+ * The game passes a challenge number as a u8 (GetRandomScaledFrontierTrainerId,
+ * GetFactoryMonId, FillFactoryFrontierTrainerParty), so it wraps after 256
+ * challenges: Tower streak 1792 reads as challenge 0.
+ */
+const u8 = (n: number): number => n & 0xff
+
 export function createFrontierData(
   rules: FrontierRulesBundle,
   partition: TrainerPartition,
@@ -108,6 +115,36 @@ export function createFrontierData(
     return t.setIndices.map((i) => sets()[i]).filter((s) => levelMode === 'open' || !s.openOnly)
   }
 
+  // ---------------------------------------------------------- Brain timing
+
+  /** A streak-table value (streak + offset) as the owner's log counts it. */
+  const appearance = (f: RawFacility, value: number, symbol: BrainSymbol, repeat: boolean): BrainAppearance =>
+    f.unit === 'tournament'
+      ? // value = tournaments already won; the Brain waits in the next one's final.
+        { symbol, battle: (value + 1) * f.per_set, unit: f.unit, unitNumber: value + 1, repeat }
+      : { symbol, battle: value, unit: f.unit, unitNumber: value, repeat }
+
+  /**
+   * GetFrontierBrainStatus (frontier_util.c): singles only (the caller checks),
+   * an equality test on streak + offset, never "at least". The Pike asks
+   * GetPikeQueenFightType (battle_pike.c), which gives the same answers.
+   * `due` = the Brain is the very next opponent (Dome: in this tournament).
+   */
+  const brainTarget = (
+    f: RawFacility,
+    streak: number,
+    symbols: 0 | 1 | 2,
+  ): { value: number; symbol: BrainSymbol; repeat: boolean; due: boolean } | null => {
+    const { silver, gold, repeat, offset } = f.brain.streak
+    const v = streak + offset
+    const hit = (value: number, symbol: BrainSymbol, isRepeat: boolean) => ({ value, symbol, repeat: isRepeat, due: value === v })
+    if (symbols === 0) return silver >= v ? hit(silver, 'silver', false) : null
+    if (symbols === 1) return gold >= v ? hit(gold, 'gold', false) : null
+    if (silver >= v) return hit(silver, 'silver', false)
+    if (gold >= v) return hit(gold, 'gold', false)
+    return hit(gold + Math.ceil((v - gold) / repeat) * repeat, 'gold', true)
+  }
+
   // ---------------------------------------------------------- trainer pools
 
   /**
@@ -115,7 +152,8 @@ export function createFrontierData(
    * sFrontierTrainerIdRanges, or of sFrontierTrainerIdRangesHard for the 7th
    * battle; past the last row, always the last normal row.
    */
-  const scaled = (challenge: number, battleNum: number): { idRange: IdRange; hard: boolean } => {
+  const scaled = (rawChallenge: number, battleNum: number): { idRange: IdRange; hard: boolean } => {
+    const challenge = u8(rawChallenge)
     if (challenge > lastRow) return { idRange: toRange(normal[lastRow]), hard: false }
     if (battleNum === per - 1) return { idRange: toRange(hard[challenge]), hard: true }
     return { idRange: toRange(normal[challenge]), hard: false }
@@ -151,20 +189,33 @@ export function createFrontierData(
         ...(oobValue === 'random' ? { random: true as const } : {}),
       }
     }
-    const challenge = Math.floor(towerLv50Streak / per)
+    const challenge = u8(Math.floor(towerLv50Streak / per))
     const row = challenge > table.length ? table.length - 1 : challenge
     const iv = row === table.length ? oobValue : table[row][column]
     if (iv === 'random') return { min: 0, max: 31, rule: 'factory-table', readsTowerStreak: true, random: true }
     return { min: iv, max: iv, rule: 'factory-table', readsTowerStreak: true }
   }
 
-  /** GetFrontierEnemyMonLevel (battle_tower.c). */
-  const level = (levelMode: LevelMode): LevelRule =>
-    levelMode === 'lv50'
-      ? { mode: 'lv50', level: rules.levels.lv50 }
-      : { mode: 'open', min: rules.levels.open_min, max: rules.levels.open_max, rule: 'highest-in-party' }
+  /**
+   * GetFrontierEnemyMonLevel (battle_tower.c). The Factory's Open Level party is
+   * its rentals, created at level 100 (SetPlayerAndOpponentParties), so its
+   * "highest in party" is always 100.
+   */
+  const level = (f: RawFacility, levelMode: LevelMode): LevelRule => {
+    if (levelMode === 'lv50') return { mode: 'lv50', level: rules.levels.lv50 }
+    const min = f.open_level ?? rules.levels.open_min
+    const max = f.open_level ?? rules.levels.open_max
+    return { mode: 'open', min, max, rule: 'highest-in-party' }
+  }
 
-  const trainerPoolForStreak = ({ facility, levelMode, streak, towerLv50Streak }: TrainerPoolArgs): TrainerPool => {
+  const trainerPoolForStreak = ({
+    facility,
+    format,
+    levelMode,
+    streak,
+    symbols,
+    towerLv50Streak,
+  }: TrainerPoolArgs): TrainerPool => {
     const f = raw(facility)
     const challenge = Math.floor(streak / f.streak_per_set)
     let draws: PoolDraw[]
@@ -208,44 +259,43 @@ export function createFrontierData(
       from: Math.min(...draws.map((d) => d.idRange.from)),
       to: Math.max(...draws.map((d) => d.idRange.to)),
     }
+    // Only when the caller says which symbols are held: the Brain then replaces
+    // the opponent (SetNextFacilityOpponent), or one Dome entrant (InitDomeTrainers).
+    const due = symbols != null && (format ?? 'singles') === 'singles' ? brainTarget(f, streak, symbols) : null
+    const brain = due?.due ? appearance(f, due.value, due.symbol, due.repeat) : null
+    if (brain) {
+      const brainNote =
+        facility === 'dome'
+          ? `${f.brain.name} replaces one entrant and waits in the final; one draw count drops by one.`
+          : `${f.brain.name} is the next opponent; the trainer pool does not apply.`
+      note = note ? `${note} ${brainNote}` : brainNote
+    }
     return {
       facility,
       levelMode,
       streak,
-      challenge,
+      challenge: u8(challenge),
       idRange,
       hard: draws.every((d) => d.hard),
       ivBand: facility === 'factory' ? factoryIvBand(streak, towerLv50Streak) : trainerIvBand(idRange),
-      level: level(levelMode),
+      level: level(f, levelMode),
       draws,
       // GetFactoryMonId (battle_factory.c): the challenge's sInitialRentalMonRanges row.
       ...(facility === 'factory'
-        ? { factorySetRange: toRange(rules.factory.rental_ranges[levelMode][Math.min(challenge, 7)]) }
+        ? { factorySetRange: toRange(rules.factory.rental_ranges[levelMode][Math.min(u8(challenge), 7)]) }
         : {}),
+      ...(brain ? { brain } : {}),
       ...(note ? { note } : {}),
     }
   }
 
   // ---------------------------------------------------------- Brains
 
-  /** A streak-table value (streak + offset) as the owner's log counts it. */
-  const appearance = (f: RawFacility, value: number, symbol: BrainSymbol, repeat: boolean): BrainAppearance =>
-    f.unit === 'tournament'
-      ? // value = tournaments already won; the Brain waits in the next one's final.
-        { symbol, battle: (value + 1) * f.per_set, unit: f.unit, unitNumber: value + 1, repeat }
-      : { symbol, battle: value, unit: f.unit, unitNumber: value, repeat }
-
-  /** GetFrontierBrainStatus (frontier_util.c): singles only; equality, never "at least". */
   const nextBrainAt = ({ facility, format, streak, symbols }: NextBrainArgs): BrainAppearance | null => {
     if (format !== 'singles') return null
     const f = raw(facility)
-    const { silver, gold, repeat, offset } = f.brain.streak
-    const v = streak + offset
-    if (symbols === 0) return silver >= v ? appearance(f, silver, 'silver', false) : null
-    if (symbols === 1) return gold >= v ? appearance(f, gold, 'gold', false) : null
-    if (silver >= v) return appearance(f, silver, 'silver', false)
-    if (gold >= v) return appearance(f, gold, 'gold', false)
-    return appearance(f, gold + Math.ceil((v - gold) / repeat) * repeat, 'gold', true)
+    const t = brainTarget(f, streak, symbols)
+    return t && appearance(f, t.value, t.symbol, t.repeat)
   }
 
   const brains = (): FrontierBrain[] =>

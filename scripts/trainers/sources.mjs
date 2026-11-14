@@ -146,7 +146,7 @@ export const BATTLE_PATHS = {
     '/src/battle_ai_switch_items.c',
     '/data/battle_scripts_1.s',
     '/include/battle.h',
-    // Battle Frontier rules (scripts/build-frontier-data.mjs): Factory IVs and
+    // Battle Frontier rules (scripts/frontier/build.mjs): Factory IVs and
     // its Brain, Dome, Pike and Pyramid streak units, the facility constants.
     '/src/battle_factory.c',
     '/src/battle_dome.c',
