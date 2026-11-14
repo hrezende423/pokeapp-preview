@@ -24,6 +24,15 @@ export const SUITES_BY_PATH = [
   ['src/modules/team-matchup/', ['team-matchup', 'collection']],
   ['src/modules/typecoverage/', ['type-coverage']],
   ['src/modules/search/', ['search']],
+  // The Frontier data layer joins its rules bundle with the Emerald trainer
+  // partition and resolves names through the dex's scoped species list.
+  ['src/modules/battle-frontier/', ['frontier-data']],
+  ['scripts/frontier/', ['frontier-data']],
+  ['public/data/frontier/', ['frontier-data']],
+  ['public/data/trainers/emerald.json', ['frontier-data']],
+  ['docs/fixtures/bf-tracker', ['frontier-data']],
+  ['src/data/trainers', ['frontier-data']],
+  ['src/modules/dex/entrySources', ['frontier-data']],
   ['src/modules/dex/Trainer', ['trainers']],
   ['src/modules/dex/trainer', ['trainers']],
   ['src/modules/dex/', ['dexes', 'dex-filters', 'movedex', 'collection']],

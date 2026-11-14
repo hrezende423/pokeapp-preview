@@ -25,6 +25,7 @@ const PRECACHED_PARTITIONS = [
   ...VERSION_GROUPS.map((v) => v.encounters_path).filter((p): p is string => !!p),
   'trainers/*.json',
   'battle/*.json',
+  'frontier/*.json',
 ]
 const PARTITION_GLOB = `${DATA_DIR}/{${PRECACHED_PARTITIONS.join(',')}}`
 

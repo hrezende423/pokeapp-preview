@@ -146,6 +146,15 @@ export const BATTLE_PATHS = {
     '/src/battle_ai_switch_items.c',
     '/data/battle_scripts_1.s',
     '/include/battle.h',
+    // Battle Frontier rules (scripts/build-frontier-data.mjs): Factory IVs and
+    // its Brain, Dome, Pike and Pyramid streak units, the facility constants.
+    '/src/battle_factory.c',
+    '/src/battle_dome.c',
+    '/src/battle_pike.c',
+    '/src/battle_pyramid.c',
+    '/src/battle_palace.c',
+    '/include/battle_tower.h',
+    '/include/global.h',
   ],
   pokefirered: [
     '/data/battle_ai_scripts.s',
